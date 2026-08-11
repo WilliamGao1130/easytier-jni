@@ -16,12 +16,14 @@ Kotlin 包装类，打包成 AAR 后发布到 Maven 仓库。
 
 1. 每天北京时间 00:00（GitHub Actions cron 为 UTC，已用 `0 16 * * *` 折算）
    自动检测 EasyTier 官方最新 release；
-2. 若该版本尚未发布到 Maven 仓库，则克隆官方 tag → 用 cargo-ndk 构建 4 个 ABI
-   的 `libeasytier_android_jni.so` → 取出同一 tag 的 `EasyTierJNI.kt` →
+2. 若该版本尚未发布到 Maven 仓库，则并行构建：`build-jni` 任务按
+   matrix 拆成 4 个 job（每个 runner 构建一个 ABI 的 `libeasytier_android_jni.so`），
+   总耗时约等于单个 ABI 的编译时间；
+3. `publish` 任务收集 4 个 `.so`，取出同一 tag 的 `EasyTierJNI.kt`，
    Gradle 打包 AAR 并 `maven-publish`；
-3. 提交到 [WilliamGao1130/maven](https://github.com/WilliamGao1130/maven)
+4. 提交到 [WilliamGao1130/maven](https://github.com/WilliamGao1130/maven)
    的 `main` 分支根目录（标准 Maven 目录结构），由 GitHub Pages 对外提供；
-4. 手动触发：仓库 Actions → `Build & Publish easytier-jni` → `Run workflow`，
+5. 手动触发：仓库 Actions → `Build & Publish easytier-jni` → `Run workflow`，
    可指定版本号，留空则构建最新官方 release。
 
 ## 一次性配置

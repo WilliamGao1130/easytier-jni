@@ -14,6 +14,8 @@ on:
 
 permissions:
   contents: read
+  # 上传/下载 build 产物（.so）需要 actions: write
+  actions: write
 
 concurrency:
   group: build-publish
@@ -60,29 +62,19 @@ jobs:
             echo "already=false" >> "$GITHUB_OUTPUT"
           fi
 
-  build-and-publish:
+  build-jni:
     needs: check
     if: needs.check.outputs.should-build == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86, x86_64]
     env:
       TAG: ${{ needs.check.outputs.tag }}
-      VERSION: ${{ needs.check.outputs.version }}
+      ABIS: ${{ matrix.abi }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Checkout Maven repository
-        uses: actions/checkout@v4
-        with:
-          repository: WilliamGao1130/maven
-          token: ${{ secrets.MAVEN_REPO_TOKEN }}
-          path: maven-repo
-          ref: main
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
 
       - name: Set up Android SDK and NDK
         uses: android-actions/setup-android@v3
@@ -112,9 +104,74 @@ jobs:
 
       - name: Cargo cache
         uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.abi }}
 
-      - name: Build JNI libraries
+      - name: Build JNI library (${{ matrix.abi }})
         run: ./build-jni.sh "$TAG"
+
+      - name: Upload JNI library (${{ matrix.abi }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: jni-${{ matrix.abi }}
+          path: build/generated/jni/${{ matrix.abi }}
+          if-no-files-found: error
+
+  publish:
+    needs: [check, build-jni]
+    if: needs.check.outputs.should-build == 'true'
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.check.outputs.tag }}
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout Maven repository
+        uses: actions/checkout@v4
+        with:
+          repository: WilliamGao1130/maven
+          token: ${{ secrets.MAVEN_REPO_TOKEN }}
+          path: maven-repo
+          ref: main
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 12.0
+          packages: 'build-tools;34.0.0 platform-tools platforms;android-35'
+
+      - name: Download JNI libraries
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: jni-*
+
+      - name: Assemble JNI libs
+        run: |
+          mkdir -p build/generated/jni
+          for d in dist/jni-*; do
+            abi="${d##*/jni-}"
+            cp "$(find "$d" -name '*.so' | head -n 1)" "build/generated/jni/${abi}/libeasytier_android_jni.so"
+          done
+          find build/generated/jni -type f -name '*.so' | sort
+
+      - name: Fetch Kotlin wrapper
+        run: |
+          mkdir -p build/generated/kotlin/com/easytier/jni
+          curl -fsSL "https://raw.githubusercontent.com/EasyTier/EasyTier/${TAG}/easytier-contrib/easytier-android-jni/kotlin/com/easytier/jni/EasyTierJNI.kt" \
+            -o build/generated/kotlin/com/easytier/jni/EasyTierJNI.kt
+
+      - name: Verify JNI libraries
+        run: |
+          test "$(find build/generated/jni -type f -name '*.so' | wc -l)" -eq 4
+          test -s build/generated/kotlin/com/easytier/jni/EasyTierJNI.kt
 
       - name: Publish AAR to Maven repository
         run: ./gradlew publish -PjniVersion="$VERSION" -PmavenRepoDir="$GITHUB_WORKSPACE/maven-repo" --no-daemon --stacktrace
