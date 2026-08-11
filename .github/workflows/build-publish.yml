@@ -1,0 +1,131 @@
+name: Build & Publish easytier-jni
+
+on:
+  schedule:
+    # GitHub Actions 的 cron 基于 UTC；北京时间每天 00:00 = UTC 16:00。
+    # 如需改为 UTC 零点，改成 '0 0 * * *' 即可。
+    - cron: '0 16 * * *'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'EasyTier 官方版本号（如 2.6.4）。留空则使用最新官方 release'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-publish
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      should-build: ${{ steps.published.outputs.already != 'true' }}
+    steps:
+      - name: Resolve EasyTier version
+        id: resolve
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version || '' }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            VER="$INPUT_VERSION"
+          else
+            # 最新非预发布 release（如 v2.6.4）
+            TAG="$(gh api repos/EasyTier/EasyTier/releases/latest --jq .tag_name)"
+            VER="${TAG#v}"
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VER" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if already published (scheduled runs only)
+        id: published
+        if: github.event_name == 'schedule'
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          META="https://raw.githubusercontent.com/WilliamGao1130/maven/main/com/easytier/easytier-jni/maven-metadata.xml"
+          if curl -fsSL "$META" -o /tmp/maven-metadata.xml 2>/dev/null \
+              && grep -q "<version>${VERSION}</version>" /tmp/maven-metadata.xml; then
+            echo "版本 ${VERSION} 已发布到 maven，跳过"
+            echo "already=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "发现新版本 ${VERSION}，开始构建"
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-and-publish:
+    needs: check
+    if: needs.check.outputs.should-build == 'true'
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.check.outputs.tag }}
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout Maven repository
+        uses: actions/checkout@v4
+        with:
+          repository: WilliamGao1130/maven
+          token: ${{ secrets.MAVEN_REPO_TOKEN }}
+          path: maven-repo
+          ref: main
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK and NDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 12.0
+          packages: 'build-tools;34.0.0 ndk;26.0.10792818 platform-tools platforms;android-35'
+
+      - name: Set NDK environment
+        run: |
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/26.0.10792818" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/26.0.10792818" >> "$GITHUB_ENV"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+
+      - name: Set up Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: '1.95'
+          cache: false
+          # 不注入 -D warnings：EasyTier 存在未使用代码等警告，保留默认 warn 级别
+          rustflags: ''
+
+      - name: Set up protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: '35.1'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build JNI libraries
+        run: ./build-jni.sh "$TAG"
+
+      - name: Publish AAR to Maven repository
+        run: ./gradlew publish -PjniVersion="$VERSION" -PmavenRepoDir="$GITHUB_WORKSPACE/maven-repo" --no-daemon --stacktrace
+
+      - name: Commit and push Maven repository
+        run: |
+          cd "$GITHUB_WORKSPACE/maven-repo"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "没有新内容，跳过提交"
+          else
+            git commit -m "publish easytier-jni $VERSION"
+            git push origin main
+          fi
