@@ -31,6 +31,8 @@ jobs:
         id: resolve
         env:
           INPUT_VERSION: ${{ github.event.inputs.version || '' }}
+          # GitHub Actions runner 上的 gh CLI 需要显式指定 GH_TOKEN
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ -n "$INPUT_VERSION" ]; then
             VER="$INPUT_VERSION"
