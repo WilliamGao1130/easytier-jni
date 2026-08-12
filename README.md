@@ -11,15 +11,19 @@ Kotlin 包装类，打包成 AAR 后发布到 Maven 仓库。
 - 产物类型：**AAR**（Android 原生库必须用 AAR，AGP 才会把 `jni/<abi>/*.so`
   打进 APK；普通 jar 内的 `.so` 不会进入 APK，Gradle 依赖写法与 jar 相同）
 - 架构：`arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64`
+- 每个 ABI 含 **两个 .so**：`libeasytier_android_jni.so`（JNI 壳）+ `libeasytier_ffi.so`
+  （FFI/内核）。v2.6.4+ 的 JNI 壳对 FFI 符号是运行时动态解析，必须同时打包并
+  先加载 `libeasytier_ffi.so`，否则 dlopen 报 `cannot locate symbol`。
 
 ## 工作流程
 
 1. 每天北京时间 00:00（GitHub Actions cron 为 UTC，已用 `0 16 * * *` 折算）
    自动检测 EasyTier 官方最新 release；
 2. 若该版本尚未发布到 Maven 仓库，则并行构建：`build-jni` 任务按
-   matrix 拆成 4 个 job（每个 runner 构建一个 ABI 的 `libeasytier_android_jni.so`），
+   matrix 拆成 4 个 job（每个 runner 构建一个 ABI 的 JNI 壳 + FFI 两个 .so），
    总耗时约等于单个 ABI 的编译时间；
-3. `publish` 任务收集 4 个 `.so`，取出同一 tag 的 `EasyTierJNI.kt`，
+3. `publish` 任务收集 8 个 `.so`（4 ABI × 2），取出同一 tag 的 `EasyTierJNI.kt`
+   并注入“先加载 libeasytier_ffi.so”，
    Gradle 打包 AAR 并 `maven-publish`；
 4. 提交到 [WilliamGao1130/maven](https://github.com/WilliamGao1130/maven)
    的 `main` 分支根目录（标准 Maven 目录结构），由 GitHub Pages 对外提供；

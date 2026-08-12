@@ -76,7 +76,10 @@ for abi in $ABIS; do
     OUT_DIR="$OUT_LIBS/$abi"
     mkdir -p "$OUT_DIR"
     cp "$EASYTIER_DIR/target/$rust_target/release/libeasytier_android_jni.so" "$OUT_DIR/"
-    echo "==> 已复制到 $OUT_DIR/"
+    # v2.6.4+ 的 JNI 壳对 FFI 符号是运行时动态解析（extern "C" 声明、无静态链接），
+    # 必须同时提供 libeasytier_ffi.so，否则 dlopen 报 cannot locate symbol。
+    cp "$EASYTIER_DIR/target/$rust_target/release/libeasytier_ffi.so" "$OUT_DIR/"
+    echo "==> 已复制到 $OUT_DIR/（libeasytier_android_jni.so + libeasytier_ffi.so）"
 done
 
 mkdir -p "$OUT_KOTLIN/com/easytier/jni"

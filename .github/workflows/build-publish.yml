@@ -159,7 +159,10 @@ jobs:
           for d in dist/jni-*; do
             abi="${d##*/jni-}"
             mkdir -p "build/generated/jni/${abi}"
-            cp "$(find "$d" -name '*.so' | head -n 1)" "build/generated/jni/${abi}/libeasytier_android_jni.so"
+            # 每个 ABI 需要两个库：JNI 壳 + FFI。
+            # v2.6.4+ 的 JNI 壳对 FFI 符号是运行时动态解析，缺 ffi 库会
+            # 在 dlopen 时报 cannot locate symbol（如 collect_network_infos）。
+            cp "$d"/*.so "build/generated/jni/${abi}/"
           done
           find build/generated/jni -type f -name '*.so' | sort
 
@@ -168,11 +171,26 @@ jobs:
           mkdir -p build/generated/kotlin/com/easytier/jni
           curl -fsSL "https://raw.githubusercontent.com/EasyTier/EasyTier/${TAG}/easytier-contrib/easytier-android-jni/kotlin/com/easytier/jni/EasyTierJNI.kt" \
             -o build/generated/kotlin/com/easytier/jni/EasyTierJNI.kt
+          # 先加载 libeasytier_ffi.so 再加载 JNI 壳，否则 undefined symbol 崩溃。
+          python3 - <<'PY'
+          import io
+          p = "build/generated/kotlin/com/easytier/jni/EasyTierJNI.kt"
+          s = io.open(p, encoding="utf-8").read()
+          old = 'System.loadLibrary("easytier_android_jni")'
+          new = 'System.loadLibrary("easytier_ffi")\n        System.loadLibrary("easytier_android_jni")'
+          if old in s and 'easytier_ffi' not in s:
+              io.open(p, "w", encoding="utf-8").write(s.replace(old, new, 1))
+          PY
 
       - name: Verify JNI libraries
         run: |
-          test "$(find build/generated/jni -type f -name '*.so' | wc -l)" -eq 4
+          test "$(find build/generated/jni -type f -name '*.so' | wc -l)" -eq 8
+          for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+            test -f "build/generated/jni/${abi}/libeasytier_android_jni.so"
+            test -f "build/generated/jni/${abi}/libeasytier_ffi.so"
+          done
           test -s build/generated/kotlin/com/easytier/jni/EasyTierJNI.kt
+          grep -q 'easytier_ffi' build/generated/kotlin/com/easytier/jni/EasyTierJNI.kt
 
       - name: Publish AAR to Maven repository
         run: ./gradlew publish -PjniVersion="$VERSION" -PmavenRepoDir="$GITHUB_WORKSPACE/maven-repo" --no-daemon --stacktrace
