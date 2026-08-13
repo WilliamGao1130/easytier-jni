@@ -1,0 +1,73 @@
+diff --git a/easytier-contrib/easytier-android-jni/Cargo.toml b/easytier-contrib/easytier-android-jni/Cargo.toml
+--- a/easytier-contrib/easytier-android-jni/Cargo.toml
++++ b/easytier-contrib/easytier-android-jni/Cargo.toml
+@@ -13,4 +13,5 @@
+ android_logger = "0.13"
+ serde = { version = "1.0.220", features = ["derive"] }
+ serde_json = "1.0"
+-easytier = { path = "../../easytier" }
+\ No newline at end of file
++easytier = { path = "../../easytier" }
++easytier-ffi = { path = "../easytier-ffi", default-features = false }
+diff --git a/easytier-contrib/easytier-android-jni/src/lib.rs b/easytier-contrib/easytier-android-jni/src/lib.rs
+--- a/easytier-contrib/easytier-android-jni/src/lib.rs
++++ b/easytier-contrib/easytier-android-jni/src/lib.rs
+@@ -1,32 +1,14 @@
+ use easytier::proto::api::manage::{NetworkInstanceRunningInfo, NetworkInstanceRunningInfoMap};
++use easytier_ffi::{
++    KeyValuePair, collect_network_infos, free_string, get_error_msg, parse_config,
++    retain_network_instance, run_network_instance, set_tun_fd,
++};
+ use jni::JNIEnv;
+ use jni::objects::{JClass, JObjectArray, JString};
+ use jni::sys::{jint, jstring};
+ use once_cell::sync::Lazy;
+ use std::ffi::{CStr, CString};
+ use std::ptr;
+ 
+-// 定义 KeyValuePair 结构体
+-#[repr(C)]
+-#[derive(Clone, Copy)]
+-pub struct KeyValuePair {
+-    pub key: *const std::ffi::c_char,
+-    pub value: *const std::ffi::c_char,
+-}
+-
+-// 声明外部 C 函数
+-unsafe extern "C" {
+-    fn set_tun_fd(inst_name: *const std::ffi::c_char, fd: std::ffi::c_int) -> std::ffi::c_int;
+-    fn get_error_msg(out: *mut *const std::ffi::c_char);
+-    fn free_string(s: *const std::ffi::c_char);
+-    fn parse_config(cfg_str: *const std::ffi::c_char) -> std::ffi::c_int;
+-    fn run_network_instance(cfg_str: *const std::ffi::c_char) -> std::ffi::c_int;
+-    fn retain_network_instance(
+-        inst_names: *const *const std::ffi::c_char,
+-        length: usize,
+-    ) -> std::ffi::c_int;
+-    fn collect_network_infos(infos: *mut KeyValuePair, max_length: usize) -> std::ffi::c_int;
+-}
+-
+ // 初始化 Android 日志
+ static LOGGER_INIT: Lazy<()> = Lazy::new(|| {
+diff --git a/easytier-contrib/easytier-ffi/Cargo.toml b/easytier-contrib/easytier-ffi/Cargo.toml
+--- a/easytier-contrib/easytier-ffi/Cargo.toml
++++ b/easytier-contrib/easytier-ffi/Cargo.toml
+@@ -4,7 +4,7 @@
+ edition.workspace = true
+
+ [lib]
+-crate-type = ["cdylib"]
++crate-type = ["cdylib", "rlib"]
+
+ [dependencies]
+ easytier = { path = "../../easytier" }
+diff --git a/easytier-contrib/easytier-ffi/src/lib.rs b/easytier-contrib/easytier-ffi/src/lib.rs
+--- a/easytier-contrib/easytier-ffi/src/lib.rs
++++ b/easytier-contrib/easytier-ffi/src/lib.rs
+@@ -17,4 +17,5 @@
+ 
+ #[repr(C)]
++#[derive(Clone, Copy)]
+ pub struct KeyValuePair {
+     pub key: *const std::ffi::c_char,
+     pub value: *const std::ffi::c_char,

@@ -58,10 +58,17 @@ if [ ! -d "$EASYTIER_DIR/.git" ]; then
 fi
 
 JNI_DIR="$EASYTIER_DIR/easytier-contrib/easytier-android-jni"
-FFI_DIR="$EASYTIER_DIR/easytier-contrib/easytier-ffi"
 KOTLIN_FILE="$JNI_DIR/kotlin/com/easytier/jni/EasyTierJNI.kt"
 [ -d "$JNI_DIR" ] || fail "easytier-android-jni 不存在: $JNI_DIR（请确认 tag $TAG 包含该模块）"
 [ -f "$KOTLIN_FILE" ] || fail "Kotlin 包装类不存在: $KOTLIN_FILE"
+
+patch_file="$SCRIPT_DIR/patches/easytier-jni-self-contained.patch"
+if [ -f "$patch_file" ] \
+    && grep -q 'unsafe extern "C"' "$JNI_DIR/src/lib.rs" \
+    && ! grep -q 'easytier-ffi' "$JNI_DIR/Cargo.toml"; then
+    echo "==> 应用 JNI 自包含补丁（旧版 EasyTier 的 JNI 壳没有静态链接 easytier-ffi）"
+    git -C "$EASYTIER_DIR" apply --whitespace=nowarn "$patch_file"
+fi
 
 for abi in $ABIS; do
     rust_target="${TARGET_MAP[$abi]:-}"
@@ -70,16 +77,12 @@ for abi in $ABIS; do
     rustup target list --installed | grep -q "$rust_target" || rustup target add "$rust_target"
 
     echo "==> 构建 $abi ($rust_target)"
-    (cd "$FFI_DIR" && cargo ndk -t "$abi" build --release)
     (cd "$JNI_DIR" && cargo ndk -t "$abi" build --release)
 
     OUT_DIR="$OUT_LIBS/$abi"
     mkdir -p "$OUT_DIR"
     cp "$EASYTIER_DIR/target/$rust_target/release/libeasytier_android_jni.so" "$OUT_DIR/"
-    # v2.6.4+ 的 JNI 壳对 FFI 符号是运行时动态解析（extern "C" 声明、无静态链接），
-    # 必须同时提供 libeasytier_ffi.so，否则 dlopen 报 cannot locate symbol。
-    cp "$EASYTIER_DIR/target/$rust_target/release/libeasytier_ffi.so" "$OUT_DIR/"
-    echo "==> 已复制到 $OUT_DIR/（libeasytier_android_jni.so + libeasytier_ffi.so）"
+    echo "==> 已复制到 $OUT_DIR/（libeasytier_android_jni.so，自包含 easytier-ffi）"
 done
 
 mkdir -p "$OUT_KOTLIN/com/easytier/jni"
