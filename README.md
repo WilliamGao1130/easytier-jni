@@ -1,4 +1,4 @@
-# easytier-jni
+# easytier-android-jni
 
 EasyTier Android JNI 库的独立构建仓库。**仓库内不包含任何源文件与二进制**
 （只有构建逻辑），每次构建都从 EasyTier 官方仓库拉取对应版本的源码、原生库与
@@ -6,7 +6,7 @@ Kotlin 包装类，打包成 AAR 后发布到 Maven 仓库。
 
 ## 产物与版本
 
-- 坐标：`com.easytier:easytier-jni:<版本号>`
+- 坐标：`com.easytier:easytier-android-jni:<版本号>`
 - 版本号 = EasyTier 官方 release 版本号（如 `2.6.4`，对应官方 tag `v2.6.4`）
 - 产物类型：**AAR**（Android 原生库必须用 AAR，AGP 才会把 `jni/<abi>/*.so`
   打进 APK；普通 jar 内的 `.so` 不会进入 APK，Gradle 依赖写法与 jar 相同）
@@ -27,14 +27,14 @@ Kotlin 包装类，打包成 AAR 后发布到 Maven 仓库。
    Gradle 打包 AAR 并 `maven-publish`；
 4. 提交到 [WilliamGao1130/maven](https://github.com/WilliamGao1130/maven)
    的 `main` 分支根目录（标准 Maven 目录结构），由 GitHub Pages 对外提供；
-5. 手动触发：仓库 Actions → `Build & Publish easytier-jni` → `Run workflow`，
+5. 手动触发：仓库 Actions → `Build & Publish easytier-android-jni` → `Run workflow`，
    可指定版本号，留空则构建最新官方 release。
 
 ## 一次性配置
 
 1. 在 GitHub 创建空仓库 `WilliamGao1130/maven`（可先推入本仓库旁的 `maven/`
    目录内容），并打开 Settings → Pages → Deploy from a branch → `main` / `/`。
-2. 在 `easytier-jni` 仓库 Settings → Secrets and variables → Actions 中添加
+2. 在 `easytier-android-jni` 仓库 Settings → Secrets and variables → Actions 中添加
    **1 个** Secret：
 
    | 名称 | 说明 |
@@ -66,7 +66,7 @@ dependencyResolutionManagement {
 
 // app/build.gradle.kts
 dependencies {
-    implementation("com.easytier:easytier-jni:2.6.4")
+    implementation("com.easytier:easytier-android-jni:2.6.4")
 }
 ```
 

@@ -49,7 +49,7 @@ afterEvaluate {
                 // 普通 jar 里的 .so 不会进入 APK。Gradle 依赖写法与 jar 完全一致。
                 from(components["release"])
                 groupId = "com.easytier"
-                artifactId = "easytier-jni"
+                artifactId = "easytier-android-jni"
                 version = jniVersion
             }
         }

@@ -14,4 +14,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "easytier-jni"
+rootProject.name = "easytier-android-jni"

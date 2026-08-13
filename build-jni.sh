@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# easytier-jni 构建脚本
+# easytier-android-jni 构建脚本
 # 从 EasyTier 官方 tag（如 v2.6.4）拉取源码，构建 libeasytier_android_jni.so（默认 4 个 ABI），
 # 并取出同一 tag 的 Kotlin 包装类 EasyTierJNI.kt，供 Gradle 打包成 AAR。
 # 仓库本身不含 EasyTier 源码，所有源文件都在构建时从官方仓库拉取。
@@ -62,7 +62,7 @@ KOTLIN_FILE="$JNI_DIR/kotlin/com/easytier/jni/EasyTierJNI.kt"
 [ -d "$JNI_DIR" ] || fail "easytier-android-jni 不存在: $JNI_DIR（请确认 tag $TAG 包含该模块）"
 [ -f "$KOTLIN_FILE" ] || fail "Kotlin 包装类不存在: $KOTLIN_FILE"
 
-patch_file="$SCRIPT_DIR/patches/easytier-jni-self-contained.patch"
+patch_file="$SCRIPT_DIR/patches/easytier-android-jni-self-contained.patch"
 if [ -f "$patch_file" ] \
     && grep -q 'unsafe extern "C"' "$JNI_DIR/src/lib.rs" \
     && ! grep -q 'easytier-ffi' "$JNI_DIR/Cargo.toml"; then

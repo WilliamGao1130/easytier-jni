@@ -1,4 +1,4 @@
-name: Build & Publish easytier-jni
+name: Build & Publish easytier-android-jni
 
 on:
   schedule:
@@ -52,7 +52,7 @@ jobs:
         env:
           VERSION: ${{ steps.resolve.outputs.version }}
         run: |
-          META="https://raw.githubusercontent.com/WilliamGao1130/maven/main/com/easytier/easytier-jni/maven-metadata.xml"
+          META="https://raw.githubusercontent.com/WilliamGao1130/maven/main/com/easytier/easytier-android-jni/maven-metadata.xml"
           if curl -fsSL "$META" -o /tmp/maven-metadata.xml 2>/dev/null \
               && grep -q "<version>${VERSION}</version>" /tmp/maven-metadata.xml; then
             echo "版本 ${VERSION} 已发布到 maven，跳过"
@@ -189,6 +189,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "没有新内容，跳过提交"
           else
-            git commit -m "publish easytier-jni $VERSION"
+            git commit -m "publish easytier-android-jni $VERSION"
             git push origin main
           fi
